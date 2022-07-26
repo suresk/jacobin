@@ -14,6 +14,9 @@ import (
 	"sync"
 )
 
+var Commit = "local"
+var Branch = "local"
+
 // Globals contains variables that need to be globally accessible,
 // such as VM and program args, etc.
 // Note: globals cannot depend on exec package to avoid circularity.
@@ -22,6 +25,8 @@ type Globals struct {
 	// ---- jacobin version number ----
 	// note: all references to version number must come from this literal
 	Version string
+	Branch  string
+	Commit  string
 	VmModel string // "client" or "server" (both the same acc. to JVM docs)
 
 	// ---- processing stoppage? ----
@@ -62,6 +67,8 @@ var global Globals
 func InitGlobals(progName string) Globals {
 	global = Globals{
 		Version:           "0.1.0",
+		Branch:            Branch,
+		Commit:            Commit,
 		VmModel:           "server",
 		ExitNow:           false,
 		JacobinName:       progName,
