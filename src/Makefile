@@ -1,5 +1,3 @@
-LDFLAGS="default"
-
 all: build
 
 compile:
