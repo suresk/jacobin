@@ -11,4 +11,4 @@ test:
 test-all:
 	go test ./...
 
-release: test-all stamp compile
+release: test-all compile
