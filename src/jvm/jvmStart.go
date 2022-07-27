@@ -15,7 +15,7 @@ import (
 	"os"
 )
 
-var Global globals.Globals
+var Global *globals.Globals
 
 // JVMrun is where everything begins
 // The call to shutdown.Exit() exits the program (after some clean-up and logging); the reason
@@ -28,14 +28,14 @@ func JVMrun() int {
 		Global = globals.InitGlobals(os.Args[0])
 		log.Init()
 	} else {
-		Global = *globals.GetGlobalRef()
+		Global = globals.GetGlobalRef()
 	}
 
 	_ = log.Log("running program: "+Global.JacobinName, log.FINE)
 
 	// handle the command-line interface (cli) -- i.e., process the args
 	LoadOptionsTable(Global)
-	err := HandleCli(os.Args, &Global)
+	err := HandleCli(os.Args, Global)
 	if err != nil {
 		return shutdown.Exit(shutdown.APP_EXCEPTION)
 	}
@@ -46,7 +46,7 @@ func JVMrun() int {
 
 	// Init classloader and load base classes
 	_ = classloader.Init()
-	classloader.LoadBaseClasses(&Global)
+	classloader.LoadBaseClasses(Global)
 
 	var mainClass string
 
@@ -81,7 +81,7 @@ func JVMrun() int {
 
 	// begin execution
 	_ = log.Log("Starting execution with: "+mainClass, log.INFO)
-	if StartExec(mainClass, &Global) != nil {
+	if StartExec(mainClass, Global) != nil {
 		return shutdown.Exit(shutdown.APP_EXCEPTION)
 	}
 

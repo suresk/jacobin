@@ -59,7 +59,7 @@ var LoaderWg sync.WaitGroup
 var global Globals
 
 // InitGlobals initializes the global values that are known at start-up
-func InitGlobals(progName string) Globals {
+func InitGlobals(progName string) *Globals {
 	global = Globals{
 		Version:           "0.1.0",
 		VmModel:           "server",
@@ -78,7 +78,7 @@ func InitGlobals(progName string) Globals {
 
 	InitJavaHome()
 	InitJacobinHome()
-	return global
+	return &global
 }
 
 // ThreadList contains a list of all app execution threads and a mutex for adding new threads to the list.

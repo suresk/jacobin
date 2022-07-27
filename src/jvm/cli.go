@@ -12,6 +12,7 @@ import (
 	"jacobin/globals"
 	"jacobin/log"
 	"os"
+	"runtime/debug"
 	"strings"
 )
 
@@ -42,7 +43,7 @@ func HandleCli(osArgs []string, Global *globals.Globals) (err error) {
 		args = append(args, v)
 	}
 	Global.Args = args
-	showCopyright()
+	showCopyright(Global)
 
 	for i := 0; i < len(args); i++ {
 		var option, arg string
@@ -168,9 +169,16 @@ where options include:
 	_, _ = fmt.Fprintln(outStream, userMessage)
 }
 
-// show the Jacobin version and minor associated data
-func showVersion(outStream *os.File, global *globals.Globals) {
-	// get the build date of the presently executing Jacobin executable
+func findCommitHash(settings []debug.BuildSetting) string {
+	for _, setting := range settings {
+		if setting.Key == "vcs.revision" {
+			return setting.Value
+		}
+	}
+	return ""
+}
+
+func generateBuildString(global *globals.Globals) string {
 	exeDate := ""
 	file, err := os.Stat(global.JacobinName)
 	if err == nil {
@@ -178,22 +186,33 @@ func showVersion(outStream *os.File, global *globals.Globals) {
 		exeDate = fmt.Sprintf("%d-%02d-%02d", date.Year(), date.Month(), date.Day())
 	}
 
+	commitHash := ""
+
+	buildInfo, ok := debug.ReadBuildInfo()
+	if ok {
+		commitHash = findCommitHash(buildInfo.Settings)
+	}
+
+	return fmt.Sprintf("Build info: %s built on %s", commitHash, exeDate)
+}
+
+// show the Jacobin version and minor associated data
+func showVersion(outStream *os.File, global *globals.Globals) {
 	ver := fmt.Sprintf(
-		"Jacobin VM v. %s (Java 11.0.10) %s\n64-bit %s VM", global.Version, exeDate, global.VmModel)
+		"Jacobin VM v. %s (Java 11.0.10) \n64-bit %s VM\n%s", global.Version, global.VmModel, generateBuildString(global))
 	fmt.Fprintln(outStream, ver)
 }
 
 // show the copyright. Because the various -version commands show much the
 // same data, rather than printing it twice, we skip showing the copyright
 // info when the -version option variants are specified
-func showCopyright() {
-	g := globals.GetGlobalRef()
-	if !strings.Contains(g.CommandLine, "-showversion") &&
-		!strings.Contains(g.CommandLine, "--show-version") &&
-		!strings.Contains(g.CommandLine, "-version") &&
-		!strings.Contains(g.CommandLine, "--version") {
-		if g.StrictJDK == false {
-			fmt.Println("Jacobin VM v. " + g.Version +
+func showCopyright(global *globals.Globals) {
+	if !strings.Contains(global.CommandLine, "-showversion") &&
+		!strings.Contains(global.CommandLine, "--show-version") &&
+		!strings.Contains(global.CommandLine, "-version") &&
+		!strings.Contains(global.CommandLine, "--version") {
+		if global.StrictJDK == false {
+			fmt.Println("Jacobin VM v. " + global.Version +
 				", © 2021-2 by Andrew Binstock. All rights reserved. MPL 2.0 License.")
 		}
 	}
