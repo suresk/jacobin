@@ -7,10 +7,12 @@
 package jvm
 
 import (
+	"context"
 	"fmt"
 	"jacobin/classloader"
 	"jacobin/globals"
 	"jacobin/log"
+	"jacobin/management"
 	"jacobin/shutdown"
 	"os"
 )
@@ -22,6 +24,7 @@ var Global globals.Globals
 // it is here returned is because in testing mode, the actual exit() call is side-stepped and
 // instead an int is returned (because calling exit() during testing exits the testing run as well).
 func JVMrun() int {
+	management.StartMetricWriter()
 	// if globals.JacobinName == "test", then we're in test mode and globals and log have been set
 	// in the testing function. So, don't reset them here.
 	if globals.GetGlobalRef().JacobinName != "test" {
@@ -77,6 +80,8 @@ func JVMrun() int {
 		return shutdown.Exit(shutdown.APP_EXCEPTION)
 	}
 
+	server := management.StartServer()
+
 	classloader.LoadReferencedClasses(mainClass)
 
 	// begin execution
@@ -84,6 +89,15 @@ func JVMrun() int {
 	if StartExec(mainClass, &Global) != nil {
 		return shutdown.Exit(shutdown.APP_EXCEPTION)
 	}
+
+	var inp string
+
+	fmt.Scanln(&inp)
+
+	fmt.Println(inp)
+
+	management.StopMetricWriter()
+	server.Shutdown(context.TODO())
 
 	return shutdown.Exit(shutdown.OK)
 }

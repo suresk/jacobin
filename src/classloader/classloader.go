@@ -14,6 +14,7 @@ import (
 	"io/fs"
 	"jacobin/globals"
 	"jacobin/log"
+	"jacobin/management"
 	"jacobin/util"
 	"os"
 	"path/filepath"
@@ -396,6 +397,7 @@ func ParseAndPostClass(cl Classloader, filename string, rawBytes []byte) (string
 		Data:   &classToPost,
 	}
 	_ = insert(fullyParsedClass.className, eKF)
+	management.IncrementCounter("classes-loaded")
 	// _ = log.Log("loaded class: "+filename, log.CLASS)
 	return fullyParsedClass.className, nil
 }
