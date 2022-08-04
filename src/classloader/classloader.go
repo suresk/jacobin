@@ -713,5 +713,30 @@ func Init() error {
 	AppCL.Classes = make(map[string]ParsedClass)
 	AppCL.Archives = make(map[string]*Archive)
 
+	management.RegisterProvider(ClassloaderInstrumentationProvider{})
+
 	return nil
+}
+
+type ClassloaderInstrumentationProvider struct{}
+
+func (ClassloaderInstrumentationProvider) Name() string {
+	return "classes"
+}
+
+func (provider ClassloaderInstrumentationProvider) List() []management.InstrumentationEntry {
+	output := make([]management.InstrumentationEntry, 0)
+
+	for _, klass := range Classes {
+		fqn := klass.Data.Name
+		description := fmt.Sprintf("%s [%s classloader]", fqn, klass.Loader)
+		entry := management.InstrumentationEntry{Key: fqn, Description: description}
+		output = append(output, entry)
+	}
+
+	return output
+}
+
+func (ClassloaderInstrumentationProvider) Detail(key string) management.InstrumentationDetail {
+	return management.InstrumentationDetail{}
 }
