@@ -22,13 +22,7 @@ func TestJmodFile(t *testing.T) {
 
 	jmodFileName := filepath.Join(pwd, "..", "..", "testdata", "jmod", "jacobin.jmod")
 
-	jmodFile, err := os.Open(jmodFileName)
-	if err != nil {
-		t.Error("Unable to open jmod file", err)
-		return
-	}
-
-	jmod := Jmod{*jmodFile}
+	jmod := InitJmod(jmodFileName)
 
 	filesFound := make(map[string]any, 10)
 
@@ -57,13 +51,8 @@ func TestJmodFileNoClasslist(t *testing.T) {
 	}
 
 	jmodFileName := filepath.Join(pwd, "..", "..", "testdata", "jmod", "jacobinfull.jmod")
-	jmodFile, err := os.Open(jmodFileName)
-	if err != nil {
-		t.Error("Unable to open jmod file", err)
-		return
-	}
 
-	jmod := Jmod{*jmodFile}
+	jmod := InitJmod(jmodFileName)
 
 	filesFound := make(map[string]any, 10)
 
@@ -101,13 +90,8 @@ func TestNotJmodFile(t *testing.T) {
 	}
 
 	jmodFileName := filepath.Join(pwd, "..", "..", "testdata", "jmod", "README.md")
-	jmodFile, err := os.Open(jmodFileName)
-	if err != nil {
-		t.Error("Unable to open jmod file", err)
-		return
-	}
 
-	jmod := Jmod{*jmodFile}
+	jmod := InitJmod(jmodFileName)
 
 	err = jmod.Walk(func(bytes []byte, filename string) error {
 		return nil

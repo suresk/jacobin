@@ -7,6 +7,7 @@
 package classloader
 
 import (
+	"bytes"
 	"errors"
 	"io"
 	"jacobin/globals"
@@ -99,21 +100,29 @@ func TestLoadBaseClassesInvalid(t *testing.T) {
 	g := globals.GetGlobalRef()
 	g.JavaHome = "gherkin"
 
+	errC := make(chan string)
+
+	go func() {
+		var buf bytes.Buffer
+		_, _ = io.Copy(&buf, r)
+		errC <- buf.String()
+	}()
+
 	// Loading the base classes from an invalid JAVA_HOME should
 	// result in an error message being logged.
-	LoadBaseClasses(g)
+	_ = Init()
+	LoadBaseClasses(globals.GetGlobalRef())
 
 	_ = w.Close()
-	lits, _ := io.ReadAll(r)
 	os.Stderr = normalStderr
-
-	errMsg := string(lits[:])
 
 	_ = wout.Close()
 	os.Stdout = normalStdout
 
-	if !strings.Contains(errMsg, "Couldn't load JMOD file") {
-		t.Errorf("Expecting err msg 'Couldn't load JMOD file', but got %s",
+	errMsg := <-errC
+
+	if !strings.Contains(errMsg, "JAVA_HOME (gherkin) does not exist") {
+		t.Errorf("Expecting err msg 'JAVA_HOME (gherkin) does not exist', but got %s",
 			errMsg)
 	}
 }

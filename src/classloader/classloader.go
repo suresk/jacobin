@@ -12,6 +12,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"jacobin/exceptions"
 	"jacobin/globals"
 	"jacobin/log"
 	"jacobin/util"
@@ -41,6 +42,8 @@ var BootstrapCL Classloader
 
 // ExtensionCL is the classloader typically used for loading custom agents
 var ExtensionCL Classloader
+
+var JmodMgr *JmodManager
 
 // ParsedClass contains all the parsed fields
 type ParsedClass struct {
@@ -182,23 +185,20 @@ func cfe(msg string) error {
 // that directory consists of roughly 1400 classes from the JDK.
 func LoadBaseClasses(global *globals.Globals) {
 	if len(global.JavaHome) > 0 {
-		fname := global.JavaHome + string(os.PathSeparator) + "jmods" + string(os.PathSeparator) + "java.base.jmod"
+		_, err := os.Stat(global.JavaHome)
+		if os.IsNotExist(err) {
+			exceptions.JVMexception(exceptions.IOException, fmt.Sprintf("JAVA_HOME (%s) does not exist", global.JavaHome))
+		}
 
-		jmodFile, err := os.Open(fname)
+		err = JmodMgr.WalkBaseClasses(func(bytes []byte, filename string) error {
+			_, err := loadClassFromBytes(BootstrapCL, filename, bytes)
+			return err
+		})
+
 		if err != nil {
-			_ = log.Log("Couldn't load JMOD file from "+fname, log.WARNING)
-		} else {
-			defer jmodFile.Close()
-			jmod := Jmod{File: *jmodFile}
-			err = jmod.Walk(func(bytes []byte, filename string) error {
-				_, err := loadClassFromBytes(BootstrapCL, filename, bytes)
-				return err
-			})
-
-			if err != nil {
-				_ = log.Log("Error loading jmod file "+fname, log.SEVERE)
-				_ = log.Log(err.Error(), log.SEVERE)
-			}
+			_ = log.Log("Error loading base jmod image", log.SEVERE)
+			_ = log.Log(err.Error(), log.SEVERE)
+			exceptions.JVMexception(exceptions.IOException, fmt.Sprintf("Invalid JMOD file: %s", JmodMgr.base.FileName))
 		}
 	}
 
@@ -285,9 +285,18 @@ func LoadClassFromNameOnly(name string) error {
 	if strings.HasPrefix(name, "java/") || strings.HasPrefix(name, "jdk/") ||
 		strings.HasPrefix(name, "javax/") || strings.HasPrefix(name, "sun/") {
 		name = util.ConvertInternalClassNameToFilename(name)
-		name = globals.JacobinHome() + "classes" + string(os.PathSeparator) + name
 		validName = util.ConvertToPlatformPathSeparators(name)
-		_, err = LoadClassFromFile(BootstrapCL, validName)
+		bytes, err := JmodMgr.LoadClassByName(validName)
+
+		if err != nil {
+			return err
+		}
+
+		if bytes != nil {
+			_, err = loadClassFromBytes(BootstrapCL, validName, bytes)
+		} else {
+			return errors.New(fmt.Sprintf("Unable to find %s in jdk modules", validName))
+		}
 	} else if len(globals.GetGlobalRef().StartingJar) > 0 {
 		_, err = LoadClassFromJar(AppCL, validName, globals.GetGlobalRef().StartingJar)
 	} else {
@@ -709,6 +718,14 @@ func Init() error {
 	AppCL.Parent = "extension"
 	AppCL.Classes = make(map[string]Klass)
 	AppCL.Archives = make(map[string]*Archive)
+
+	jm, err := InitJmodManager(globals.JavaHome(), "java.base.jmod")
+
+	if err != nil {
+		return err
+	}
+
+	JmodMgr = jm
 
 	return nil
 }

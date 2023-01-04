@@ -10,14 +10,14 @@ import (
 	"archive/zip"
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
-	"jacobin/exceptions"
-	"jacobin/globals"
 	"jacobin/log"
-	"jacobin/shutdown"
 	"os"
+	"path/filepath"
 	"strings"
+	"sync"
 )
 
 type WalkEntryFunc func(bytes []byte, filename string) error
@@ -30,40 +30,78 @@ const MagicNumber = 0x4A4D
 // classes found. If there is a classlist file in lib\classlist (in the module), it will filter out any classes not
 // contained in the classlist file; otherwise, all classes found in classes/ in the module.
 type Jmod struct {
-	File os.File
+	FileName      string
+	entryListOnce sync.Once
+	entries       map[string]string
 }
 
-// Walk Walks a JMOD file and invokes `walk` for all classes found in the classlist
-func (j *Jmod) Walk(walk WalkEntryFunc) error {
-	b, err := os.ReadFile(j.File.Name())
+func InitJmod(fileName string) *Jmod {
+	return &Jmod{
+		FileName:      fileName,
+		entryListOnce: sync.Once{},
+		entries:       make(map[string]string),
+	}
+}
+
+func getZipReader(fileName string) (*zip.Reader, error) {
+	b, err := os.ReadFile(fileName)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	fileMagic := binary.BigEndian.Uint16(b[:2])
 
 	if fileMagic != MagicNumber {
-
-		if !globals.GetGlobalRef().StrictJDK {
-			msg := fmt.Sprintf("An IOException occurred reading %s: the magic number is invalid. Expected: %x, Got: %x", j.File.Name(), MagicNumber, fileMagic)
-			_ = log.Log(msg, log.SEVERE)
-		}
-
-		exceptions.JVMexception(exceptions.IOException, fmt.Sprintf("Invalid JMOD file: %s", j.File.Name()))
-		shutdown.Exit(shutdown.JVM_EXCEPTION)
+		err := errors.New(fmt.Sprintf("An IOException occurred reading %s: the magic number is invalid. Expected: %x, Got: %x", fileName, MagicNumber, fileMagic))
+		return nil, err
 	}
 
 	// Skip over the JMOD header so that it is recognized as a ZIP file
 	offsetReader := bytes.NewReader(b[4:])
 
-	r, err := zip.NewReader(offsetReader, int64(len(b)-4))
+	return zip.NewReader(offsetReader, int64(len(b)-4))
+}
+
+func (j *Jmod) LoadByName(name string) ([]byte, error) {
+	reader, err := getZipReader(j.FileName)
 	if err != nil {
-		_ = log.Log(err.Error(), log.WARNING)
+		return nil, err
+	}
+
+	j.entryListOnce.Do(func() {
+		for _, f := range reader.File {
+			if !strings.HasPrefix(f.Name, "classes") {
+				continue
+			}
+
+			classFileName := strings.Replace(f.Name, "classes/", "", 1)
+			j.entries[classFileName] = f.Name
+		}
+	})
+
+	class, exists := j.entries[name]
+
+	if exists {
+		f, err := reader.Open(class)
+
+		if err != nil {
+			return nil, err
+		}
+
+		return io.ReadAll(f)
+	}
+
+	return nil, nil
+}
+
+// Walk Walks a JMOD file and invokes `walk` for all classes found in the classlist
+func (j *Jmod) Walk(walk WalkEntryFunc) error {
+	r, err := getZipReader(j.FileName)
+	if err != nil {
 		return err
 	}
 
-	classSet := getClasslist(*r)
-
+	classSet := getClasslist(r)
 	useClassSet := len(classSet) > 0
 
 	for _, f := range r.File {
@@ -72,6 +110,7 @@ func (j *Jmod) Walk(walk WalkEntryFunc) error {
 		}
 
 		classFileName := strings.Replace(f.Name, "classes/", "", 1)
+		j.entries[classFileName] = f.Name
 
 		if useClassSet {
 			_, ok := classSet[classFileName]
@@ -94,7 +133,7 @@ func (j *Jmod) Walk(walk WalkEntryFunc) error {
 			return err
 		}
 
-		_ = walk(b, j.File.Name()+"+"+f.Name)
+		_ = walk(b, j.FileName+"+"+f.Name)
 
 		_ = rc.Close()
 	}
@@ -103,7 +142,7 @@ func (j *Jmod) Walk(walk WalkEntryFunc) error {
 }
 
 // Returns lib/classlist from the JMOD file, returning an empty map if the classlist cannot be found or read
-func getClasslist(reader zip.Reader) map[string]struct{} {
+func getClasslist(reader *zip.Reader) map[string]struct{} {
 	classSet := make(map[string]struct{})
 
 	classlist, err := reader.Open("lib/classlist")
@@ -131,5 +170,62 @@ func getClasslist(reader zip.Reader) map[string]struct{} {
 		classSet[c+".class"] = empty
 	}
 
+	log.Log("jmod manifest Classlist: "+string(classlistContent), log.TRACE_INST)
+
 	return classSet
+}
+
+type JmodManager struct {
+	jmodList map[string]*Jmod
+	base     *Jmod
+}
+
+func InitJmodManager(javaHome string, baseName string) (*JmodManager, error) {
+	baseDir := javaHome + string(os.PathSeparator) + "jmods"
+
+	jmodList := make(map[string]*Jmod)
+	var base *Jmod
+
+	filepath.Walk(baseDir, func(path string, info os.FileInfo, e error) error {
+		if !strings.HasSuffix(path, ".jmod") {
+			return nil
+		}
+
+		jmodEntry := InitJmod(path)
+		jmodList[filepath.Base(path)] = jmodEntry
+
+		if filepath.Base(path) == baseName {
+			base = jmodEntry
+		}
+
+		return nil
+	})
+
+	if base == nil {
+		return nil, errors.New(fmt.Sprintf("Base JMOD with name %s not found in %s", baseName, baseDir))
+	}
+
+	return &JmodManager{
+		jmodList: jmodList,
+		base:     base,
+	}, nil
+}
+
+func (manager *JmodManager) WalkBaseClasses(walk WalkEntryFunc) error {
+	return manager.base.Walk(walk)
+}
+
+func (manager *JmodManager) LoadClassByName(name string) ([]byte, error) {
+	for _, value := range manager.jmodList {
+		res, err := value.LoadByName(name)
+
+		if err != nil {
+			return nil, err
+		}
+
+		if res != nil {
+			return res, err
+		}
+	}
+	return nil, nil
 }

@@ -234,6 +234,12 @@ func FetchMethodAndCP(class, meth string, methType string) (MTentry, error) {
 	methEntry := MTable[methFQN]
 	if methEntry.Meth == nil { // method is not in the MTable, so find it and put it there
 		k := Classes[class]
+
+		if k.Loader == "" {
+			_ = LoadClassFromNameOnly(class)
+			k = Classes[class]
+		}
+
 		if k.Status == 'I' { // class is being initialized by a loader, so wait
 			time.Sleep(15 * time.Millisecond) // TODO: must be a better way to do this
 			k = Classes[class]
