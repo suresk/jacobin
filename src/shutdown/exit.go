@@ -14,7 +14,7 @@ import (
 
 // The various flags that can be passed to the exit() function, reflecting
 // the various reasons a shutdown is requested. (OK = normal end of program)
-type ExitStatus int
+type ExitStatus = int
 
 const (
 	OK ExitStatus = iota

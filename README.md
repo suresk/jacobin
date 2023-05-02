@@ -26,44 +26,45 @@ A more-than-minimal JVM written in Go.
 * Responds to most options listed in the `java -help` output
 
 **To do**:
-  * Handling JAR files :pencil2: This is a primary focus of current coding work
-  * Handling @files (which contain command-line options)
-  * Parsing complex classpaths
+ * Handling @files (which contain command-line options)
+ * Parsing complex classpaths
 
 ### Class loading
-* Correctly reads and parses basic classes
+* Correctly reads and parses most classes
 * Extracts bytecode and parameters needed for execution
-
+* Automate loading of core Java classes (Object, etc.)
+* Handles straightforward JAR files
+  
 **To do**:
 * Handle more-complex classes
 * Handle interfaces
-* Handle arrays
 * Handle inner classes
-* Automate loading of core Java classes (Object, etc.)
 
 ### Verification, Linking, Preparation, Initialization
-* Performs [format check](https://docs.oracle.com/javase/specs/jvms/se11/html/jvms-4.html#jvms-4.8) of class file. 
+* Performs [format check](https://docs.oracle.com/javase/specs/jvms/se11/html/jvms-4.html#jvms-4.8) of class file.
+* Linking, preparation, and initialization -- minimally and only as needed at execution time
 
 **To do:**
-* Linking and verification
-* Preparation
-* Initialization
+* Verification
+* Robust preparation and initialization
 
 ### Execution
-* Execution of bytecode :pencil2: This is a primary focus of current coding work
-
+* Execution of bytecode :pencil2: The primary focus of current coding work<br>
+  180 bytecodes fully operational, including one- and multi-dimensional arrays
+  
 **To do:**
-* invokedynamic
+* invokespecial, invokedynamic
 * Calls to superclasses
-* Annotated classes
-* Arrays
+* Inner and nested classes
+* Exception-tree walking
+* Annotations
 
 ### Instrumentation
 * Instruction-level tracing (use `-trace:inst` to enable this feature)
 * Extensive logging data (use `-verbose:finest` to enable. Caveat: this produces *a lot* of data)
 
 **To do:**
-* Emit instrumented data to a port, for reading/display by a separate program. :pencil2: This is a primary focus of current coding work
+* Emit instrumented data to a port, for reading/display by a separate program.
 
 ## Garbage Collection
 GC is handled by the golang runtime, which has its own GC

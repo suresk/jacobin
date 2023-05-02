@@ -15,7 +15,7 @@ import (
 	"strings"
 )
 
-// This function is called from  run(). It execuates a frame whose
+// This function is called from run(). It executes a frame whose
 // method is a golang method. It copies the parameters from the
 // operand stack and passes them to the go function, here called Fu,
 // as an array of interface{}, which can be nil if there are no arguments.
@@ -43,7 +43,7 @@ func runGframe(fr *frames.Frame) (interface{}, int, error) {
 	// value. If it's 'J' (a long) or 'D' (a double), it will require two
 	// slots on the op stack of the calling function. If the return value
 	// is nil, then no slots will be required. Otherwise, it's one slot
-	// (such as for ints, shorts, boolean, etc.) TODO: return addresses are likely 2 slots
+	// (such as for ints, shorts, boolean, etc.)
 	var slotCount int
 	if ret == nil {
 		slotCount = 0
@@ -67,7 +67,7 @@ func runGmethod(mt classloader.MTentry, fs *list.List, className, methodName, me
 	paramSlots := mt.Meth.(classloader.GmEntry).ParamSlots
 	gf := frames.CreateFrame(paramSlots)
 	gf.Thread = f.Thread
-	// gf.methName = className + "." + methodName + methodType
+
 	gf.MethName = methodName + methodType
 	gf.ClName = className
 	gf.Meth = nil
@@ -77,9 +77,10 @@ func runGmethod(mt classloader.MTentry, fs *list.List, className, methodName, me
 
 	// get the args (if any) from the operand stack of the current frame(f)
 	// then push them onto the stack of the go function
-	var argList []int64
+	var argList []interface{}
+
 	for i := 0; i < paramSlots; i++ {
-		arg := pop(f).(int64)
+		arg := pop(f)
 		intArg := arg
 		argList = append(argList, intArg)
 	}
